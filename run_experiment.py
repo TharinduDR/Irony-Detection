@@ -1,3 +1,5 @@
+import configparser
+
 import numpy as np
 import pandas as pd
 from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
@@ -5,14 +7,14 @@ from keras_preprocessing.sequence import pad_sequences
 from keras_preprocessing.text import Tokenizer
 from numpy.random import seed
 from sklearn.metrics import confusion_matrix, f1_score, accuracy_score, recall_score, precision_score
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import LabelEncoder
 from tensorflow import set_random_seed
 
 from algo.nn.models import cnn_2d
 from algo.nn.utility import f1_smart
 from embeddings import get_emb_matrix
-from preprocessing import clean_text
+from preprocessing import clean_text, remove_names
 
 if __name__ == "__main__":
     seed(726)
@@ -20,13 +22,11 @@ if __name__ == "__main__":
 
     print('Reading files')
 
-    # Reading File Section - This should change
-    train = pd.read_csv("data/english/offenseval-training-v1.tsv", sep='\t')
+    full = pd.read_csv("data/arabic/training.csv", sep='\t', header=None, names=["id", "tweet", "label"], index_col=0)
+    train, test = train_test_split(full, test_size=0.2)
 
-    test_tweets = pd.read_csv("data/english/testset-taska.tsv", sep='\t')
-    test_labels = pd.read_csv("data/english/labels-test-a.csv", header=-1, names=["id", "subtask_a"])
-
-    test = pd.merge(test_tweets, test_labels, on=['id', 'id'])
+    train = train.reset_index(drop=True)
+    test = test.reset_index(drop=True)
 
     print('Completed reading')
 
@@ -37,13 +37,19 @@ if __name__ == "__main__":
     # Variables
 
     TEXT_COLUMN = "tweet"
-    LABEL_COLUMN = "subtask_a"
-    EMBEDDING_FILE = '/data/fasttext/crawl-300d-2M-subword.vec'
-    MODEL_PATH = "models/capsule_net_weights_best.h5"
-    PREDICTION_FILE = "predictions/capsule_net.csv"
+    LABEL_COLUMN = "label"
 
-    train[TEXT_COLUMN] = train[TEXT_COLUMN].str.lower()
-    test[TEXT_COLUMN] = test[TEXT_COLUMN].str.lower()
+    configParser = configparser.RawConfigParser()
+    configFilePath = "config.txt"
+    configParser.read(configFilePath)
+
+    EMBEDDING_FILE = configParser.get('model-config', 'EMBEDDING_FILE')
+    MODEL_PATH = configParser.get('model-config', 'MODEL_PATH')
+    PREDICTION_FILE = configParser.get('model-config', 'PREDICTION_FILE')
+
+    print("Removing usernames")
+    train[TEXT_COLUMN] = train[TEXT_COLUMN].apply(lambda x: remove_names(x))
+    test[TEXT_COLUMN] = test[TEXT_COLUMN].apply(lambda x: remove_names(x))
 
     train[TEXT_COLUMN] = train[TEXT_COLUMN].apply(lambda x: clean_text(x))
     test[TEXT_COLUMN] = test[TEXT_COLUMN].apply(lambda x: clean_text(x))
@@ -73,11 +79,6 @@ if __name__ == "__main__":
     # Get the target values
     Y = train[LABEL_COLUMN].values
 
-    le = LabelEncoder()
-
-    le.fit(Y)
-    encoded_Y = le.transform(Y)
-
     word_index = tokenizer.word_index
     max_features = len(word_index) + 1
 
@@ -92,8 +93,8 @@ if __name__ == "__main__":
     kfold = StratifiedKFold(n_splits=5, random_state=10, shuffle=True)
     bestscore = []
     y_test = np.zeros((X_test.shape[0],))
-    for i, (train_index, valid_index) in enumerate(kfold.split(X, encoded_Y)):
-        X_train, X_val, Y_train, Y_val = X[train_index], X[valid_index], encoded_Y[train_index], encoded_Y[valid_index]
+    for i, (train_index, valid_index) in enumerate(kfold.split(X, Y)):
+        X_train, X_val, Y_train, Y_val = X[train_index], X[valid_index], Y[train_index], Y[valid_index]
         filepath = MODEL_PATH
         checkpoint = ModelCheckpoint(filepath, monitor='val_loss', verbose=2, save_best_only=True, mode='min')
         reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.6, patience=1, min_lr=0.0001, verbose=2)
@@ -115,7 +116,7 @@ if __name__ == "__main__":
 
     y_test = y_test.reshape((-1, 1))
     pred_test_y = (y_test > np.mean(bestscore)).astype(int)
-    test['predictions'] = le.inverse_transform(pred_test_y)
+    test['predictions'] = pred_test_y
 
     # save predictions
     file_path = PREDICTION_FILE

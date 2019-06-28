@@ -14,3 +14,10 @@ def clean_text(x):
     for punct in puncts:
         x = x.replace(punct, f' {punct} ')
     return x
+
+
+def remove_names(x):
+    for word in x.split():
+        if word[0] == "@":
+            x = x.replace(word, "")
+    return x
