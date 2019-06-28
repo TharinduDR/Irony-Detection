@@ -1,4 +1,6 @@
 import numpy as np
+from arabic_reshaper import arabic_reshaper
+from bidi.algorithm import get_display
 
 
 def load_word_emb(word_index, embedding_file):
@@ -22,6 +24,8 @@ def get_emb_matrix(word_index, max_features, embedding_file):
         if i >= max_features: continue
         embedding_vector = embeddings_index.get(word)
         if embedding_vector is not None: embedding_matrix[i] = embedding_vector
-        if embedding_vector is None: print(word)
+        if embedding_vector is None:
+            word = arabic_reshaper.reshape(word)
+            print(word)
 
     return embedding_matrix

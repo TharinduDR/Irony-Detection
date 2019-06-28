@@ -13,6 +13,7 @@ def clean_text(x):
     x = str(x)
     for punct in puncts:
         x = x.replace(punct, f' {punct} ')
+
     return x
 
 
