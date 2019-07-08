@@ -11,7 +11,7 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 from sklearn.preprocessing import LabelEncoder
 from tensorflow import set_random_seed
 
-from algo.nn.models import cnn_2d
+from algo.nn.models import cnn_2d, capsule, pooled_gru, lstm_attention, lstm_gru_attention, attention_capsule
 from algo.nn.utility import f1_smart
 from embeddings import get_emb_matrix
 from preprocessing import clean_text, remove_names
@@ -100,7 +100,7 @@ if __name__ == "__main__":
         reduce_lr = ReduceLROnPlateau(monitor='val_loss', factor=0.6, patience=1, min_lr=0.0001, verbose=2)
         earlystopping = EarlyStopping(monitor='val_loss', min_delta=0.0001, patience=2, verbose=2, mode='auto')
         callbacks = [checkpoint, reduce_lr]
-        model = cnn_2d(maxlen, max_features, embed_size, embedding_matrix)
+        model = attention_capsule(maxlen, max_features, embed_size, embedding_matrix)
         if i == 0: print(model.summary())
         model.fit(X_train, Y_train, batch_size=64, epochs=20, validation_data=(X_val, Y_val), verbose=2,
                   callbacks=callbacks,
